@@ -10,7 +10,7 @@ Welcome to Pantry's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-This is our documentation
+This is our documentation.
 
 Indices and tables
 ==================
