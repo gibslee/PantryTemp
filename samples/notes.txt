@@ -1,0 +1,294 @@
+OK, so hardware:
+  Raspberry Pico-H
+    https://www.amazon.com/dp/B0BDSRN7S5?psc=1&ref=ppx_yo2ov_dt_b_product_details
+  1.8" ST7735R SPI 128x160 TFT LCD with PCB
+    https://www.amazon.com/dp/B00LSG51MM?psc=1&ref=ppx_yo2ov_dt_b_product_details
+
+Originally following this video:
+  https://www.youtube.com/watch?v=KaGHxvVnKQ4&t=1s
+Which uses this page for extra resources:
+  https://educ8s.tv/raspberry-pi-pico-color-display-st7735-tutorial/
+And this as the GitHub repo:
+  https://github.com/educ8s/CircuitPython-ST7735-Examples
+
+However, our screen has slightly different terminals because of the SD card slot
+
+During debugging, I switched to CircuitPython...kinda like it.
+Downloaded the firmware here:
+  https://circuitpython.org/board/raspberry_pi_pico/
+Of course, hold BOOTSEL and plug in, copy over the firmware, and pico will reset
+It's pretty cool in that after it has the firmware, if you plug the pico back in, it mounts as a drive!
+Makes for very easy addition of resource files and lib files.
+Speaking of lib files, I downloaded the extra libraries here:
+  https://circuitpython.org/libraries  -- download the archive that matches the circuitpython version
+I had to copy just a few libraries according to the first video, and put them in the {circuitpython}/lib/ folder
+Specifically I grabbed these:
+  adafruit_st7735r.mpy
+  adafruit_display_shapes  (folder)
+  adafruit_display_text  (folder)
+
+Could not figure out why screen wouldn't render, until I found this video:
+  https://www.youtube.com/watch?v=NAyt5kQcn-A
+In this video I found my exact screen, and saw that they didn't use the exact same terminals.
+I tried using a different clock pin and boom it worked.
+I later found this comment on my screen:
+  https://www.amazon.com/gp/customer-reviews/R3M1ZCZT43OP29/ref=cm_cr_dp_d_rvw_ttl?ie=UTF8&ASIN=B00LSG51MM
+which also says they had similar trouble.
+
+Once I got it running, I found I had odd colors.
+A bit of investigation led me to change the arguments to ST7735R(...) in adafruit_st7735r.
+There is a trailing boolean argument called bgr.
+Once I set this to False, everything worked perfectly.
+
+Current wiring:
+
++-----------------+-------------+-------------------+----------------------------------------+
+| Screen Terminal | Pico Pin ID | Pico Pin # (1-40) | Notes                                  |
++-----------------+-------------+-------------------+----------------------------------------+
+| LED-            | -           | -                 |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| LED+            | 3V3 (OUT)   | 36                |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| SD_CS           |  -          | -                 |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| MOSI            | -           | -                 |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| MISO            | -           | -                 |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| SCK             | -           | -                 | This is the clock for the SD card slot |
++-----------------+-------------+-------------------+----------------------------------------+
+| CS              | GP18        | 24                |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| SCL             | GP10        | 14                |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| SDA             | GP11        | 15                |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| A0              | GP16        | 21                |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| RESET           | GP17        | 22                |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| NC              | -           | -                 |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| NC              | -           | -                 |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| NC              | -           | -                 |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| VCC             | VBUS        | 40                |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+| GND             | GND         | 38                |                                        |
++-----------------+-------------+-------------------+----------------------------------------+
+
+For basic text testing, you can run:
+
+#################################
+import board,busio
+from time import sleep
+from adafruit_st7735r import ST7735R
+import displayio
+import terminalio
+from adafruit_display_text import label
+
+mosi_pin = board.GP11
+clk_pin = board.GP10
+reset_pin = board.GP17
+cs_pin = board.GP18
+dc_pin = board.GP16
+
+displayio.release_displays()
+
+spi = busio.SPI(clock=clk_pin, MOSI=mosi_pin)
+
+display_bus = displayio.FourWire(spi, command=dc_pin, chip_select=cs_pin, reset=reset_pin)
+
+display = ST7735R(display_bus, width=128, height=160, bgr = True)
+
+splash = displayio.Group()
+display.show(splash)
+
+color_bitmap = displayio.Bitmap(128, 160, 1)
+
+color_palette = displayio.Palette(1)
+color_palette[0] = 0x00FF00  # Bright Green
+
+bg_sprite = displayio.TileGrid(color_bitmap, pixel_shader=color_palette, x=0, y=0)
+splash.append(bg_sprite)
+
+# Draw a smaller inner rectangle
+inner_bitmap = displayio.Bitmap(118, 150, 1)
+inner_palette = displayio.Palette(1)
+inner_palette[0] = 0x000000  # Black
+inner_sprite = displayio.TileGrid(inner_bitmap, pixel_shader=inner_palette, x=5, y=5)
+splash.append(inner_sprite)
+
+# Draw a label
+text_group = displayio.Group(scale=1, x=11, y=24)
+text = "Hello World!\n\nThis is a sample\ntext!\n\nEverything is \nworking fine."
+text_area = label.Label(terminalio.FONT, text=text, color=0xFFFFFF)
+text_group.append(text_area)  # Subgroup for text scaling
+splash.append(text_group)
+
+while True:
+    pass
+
+########################
+
+
+
+For some cool gauge effect, you can grab the gauge.py file from
+  github.com/benevpi/Circuit-Python-Gauge
+and put it in the {circuitpython}/lib/ folder
+Then you can run this example code:
+
+########################
+
+import board, busio
+from adafruit_st7735r import ST7735R
+import displayio
+from gauge import Gauge #get the library here: https://github.com/benevpi/Circuit-Python-Gauge
+
+mosi_pin = board.GP11
+clk_pin = board.GP10
+reset_pin = board.GP17
+cs_pin = board.GP18
+dc_pin = board.GP16
+
+displayio.release_displays()
+
+spi = busio.SPI(clock=clk_pin, MOSI=mosi_pin)
+
+display_bus = displayio.FourWire(spi, command=dc_pin, chip_select=cs_pin, reset=reset_pin)
+
+display = ST7735R(display_bus, width=128, height=160, bgr = False)
+
+gauge = Gauge(0,100, 64, 80, value_label="x:", arc_colour=0xFF0000, colour=0xFFFF00, outline_colour=0xFFFF00)
+gauge.x = 32
+gauge.y = 0
+
+gauge2 = Gauge(0,100, 64, 80, value_label="y:", arc_colour=0xFF0000, colour=0xFFFF00, outline_colour=0xFFFF00)
+gauge2.x = 32
+gauge2.y = 81
+
+group = displayio.Group(scale=1)
+
+group.append(gauge)
+group.append(gauge2)
+
+display.show(group)
+display.auto_refresh = True
+
+x = 0
+y = 100
+
+while True:
+    while x < 100:
+        x += 2
+        y -= 2
+        gauge.update(x)
+        gauge2.update(y)
+
+    while x > 0:
+        x -= 2
+        y += 2
+        gauge.update(x)
+        gauge2.update(y)
+
+    while x < 100:
+        x += 5
+        y -= 5
+        gauge.update(x)
+        gauge2.update(y)
+
+    while x > 0:
+        x -= 5
+        y += 5
+        gauge.update(x)
+        gauge2.update(y)
+
+#################
+
+
+
+Finally, you can drop some 128x160 bmp files into the root directory of the circuitpython
+And with that you can run example bitmap code:
+
+###################
+
+import board,busio
+from time import sleep
+from adafruit_st7735r import ST7735R
+import displayio
+
+mosi_pin = board.GP11
+clk_pin = board.GP10
+reset_pin = board.GP17
+cs_pin = board.GP18
+dc_pin = board.GP16
+
+displayio.release_displays()
+
+spi = busio.SPI(clock=clk_pin, MOSI=mosi_pin)
+
+display_bus = displayio.FourWire(spi, command=dc_pin, chip_select=cs_pin, reset=reset_pin)
+
+display = ST7735R(display_bus, width=128, height=160, bgr = False)
+
+bitmaps = [  # list of tuples of (bitmap instance, screen time)
+  ( displayio.OnDiskBitmap("/0.bmp"), 1.0 ),
+  ( displayio.OnDiskBitmap("/1.bmp"), 1.0 ),
+  ( displayio.OnDiskBitmap("/2.bmp"), 0.1 ),
+  ( displayio.OnDiskBitmap("/3.bmp"), 0.1 ),
+  ( displayio.OnDiskBitmap("/4.bmp"), 0.1 ),
+]
+group = displayio.Group()
+display.show(group)
+
+while True:
+    for bmp in bitmaps:
+        tile_grid = displayio.TileGrid(bmp[0], pixel_shader=bmp[0].pixel_shader)
+        if group:
+            group.pop()
+        group.append(tile_grid)
+        sleep(bmp[1])
+
+####################
+
+
+
+
+OK!  SO NOW ON TO THE SD CARD!
+
+I based my implementation on this video:
+  https://www.youtube.com/watch?v=JrYT7aJnP_I
+
+It was perfect.  The wiring was super straightforward:
+
++-------------------+----------------+-------------------+----------------------------------------+
+| Breakout Terminal | Pico Pin ID    | Pico Pin # (1-40) | Notes                                  |
++-------------------+----------------+-------------------+----------------------------------------+
+| SD_CS             | GP1 (SPIO CSn) | 2                 |                                        |
++-------------------+----------------+-------------------+----------------------------------------+
+| SCK               | GP2 (SPIO SCK) | 4                 |                                        |
++-------------------+----------------+-------------------+----------------------------------------+
+| MOSI              | GP3 (SPIO TX)  | 5                 |                                        |
++-------------------+----------------+-------------------+----------------------------------------+
+| MISO              | GP4 (SPIO RX)  | 6                 |                                        |
++-------------------+----------------+-------------------+----------------------------------------+
+
+Makes good sense.  For the code to run, I needed to get one more circuit python library:
+  adafruit_sdcard.mpy  -- copied into the {circuitpython}/lib/ folder
+
+Then to get the drive connected and mounted, it's super simple:
+
+import board, busio, digitalio, storage, SDCard from adafruit_sdcard
+sck_pin = board.GP2
+mosi_pin = board.GP3
+miso_pin = board.GP4
+spi_sd = busio.SPI(sck_pin, mosi_pin, miso_pin)
+cs = digitalio.DigitalInOut(board.GP1)
+sd = SDCard(spi_sd, cs)
+vfs = storage.VfsFat(sd)
+storage.mount(vfs, '/sd')
+with open('/sd/grassy.bmp') as f:
+    pass
+
+From this point on, you can access files on the drive in the same manner as usual, /sd/*
